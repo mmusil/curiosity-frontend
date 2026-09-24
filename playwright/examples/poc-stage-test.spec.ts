@@ -7,52 +7,15 @@
  * 3. Real Stage API (integration validation)
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { disableCookiePrompt } from '@redhat-cloud-services/playwright-test-auth';
 import { RhsmMocker } from '../helpers/rhsm-mocks';
 import { ChartUtils } from '../helpers/chart-utils';
 
-const RH_STAGE_PASSWORD = process.env.RH_STAGE_PASSWORD;
-
-// Reusable login helper
-async function loginToStage(page: Page) {
-  // Handle cookie banner
-  try {
-    //
-    await expect(page
-      .getByRole('progressbar', { name: 'Contents' })).toHaveCount(0, { timeout: 5000 });
-    await expect(page
-      .locator('iframe[name="trustarc_cm"]')).toBeVisible({ timeout: 5000 });
-    await page
-      .locator('iframe[name="trustarc_cm"]')
-      .contentFrame()
-      .getByRole('button', { name: 'Proceed with Required Cookies' })
-      .click({ timeout: 5000 });
-    await page.reload();
-  } catch (e) {
-    console.log('Cookie banner already handled or not present');
-  }
-
-  // Wait for login form
-  await expect(page.getByRole('textbox', { name: 'Red Hat login' }))
-    .toBeVisible({ timeout: 20000 });
-
-  // Fill in username
-  await page.getByRole('textbox', { name: 'Red Hat login' }).fill('curiosity-automation-user');
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  // Fill in password
-  await expect(page.getByRole('textbox', { name: 'Password' }))
-    .toBeVisible({ timeout: 20000 });
-  await page.getByRole('textbox', { name: 'Password' }).click();
-  await page.getByRole('textbox', { name: 'Password' }).fill(String(RH_STAGE_PASSWORD));
-
-  // Submit login
-  await page.getByRole('button', { name: 'Log in' }).click();
-
-  // Wait for app to load
-  await expect(page.getByRole('heading', { name: 'Red Hat Enterprise Linux' }))
-    .toBeVisible({ timeout: 20000 });
-}
+test.beforeEach(async ({ page }) => {
+  await disableCookiePrompt(page);
+  await page.goto('/');
+});
 
 test.describe('POC: Stage Tests with Mocking', () => {
   let mocker: RhsmMocker;
@@ -106,9 +69,6 @@ test.describe('POC: Stage Tests with Mocking', () => {
     // Navigate to Stage
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
 
-    // Login
-    await loginToStage(page);
-
     // Click "Current instances" tab
     await page.getByRole('tab', { name: 'Current instances' }).click();
 
@@ -128,8 +88,6 @@ test.describe('POC: Stage Tests with Mocking', () => {
     await mocker.mockTally('RHEL for x86', 'Sockets');
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Wait for chart
     await chartUtils.waitForChart();
 
@@ -177,8 +135,6 @@ test.describe('POC: Stage Tests with Mocking', () => {
     await mocker.mockEmptyTally('RHEL for x86', 'Sockets');
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Click instances tab
     await page.getByRole('tab', { name: 'Current instances' }).click();
 
@@ -199,8 +155,6 @@ test.describe('POC: Stage Tests with Mocking', () => {
     });
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     await chartUtils.waitForChart();
 
     // Verify Y-axis scales to spike
@@ -221,8 +175,6 @@ test.describe('POC: Stage Tests with Mocking', () => {
     await mocker.mockError('**/api/rhsm-subscriptions/**', 500, 'Service Unavailable');
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Should show error message
     await expect(page.getByText('Internal service error. Graph display is unavailable.'))
       .toBeVisible({ timeout: 10000 });
@@ -248,8 +200,6 @@ test.describe('POC: Stage Tests with Real API', () => {
     // NO MOCKING - use real Stage API
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Click instances tab
     await page.getByRole('tab', { name: 'Current instances' }).click();
 
@@ -270,8 +220,6 @@ test.describe('POC: Stage Tests with Real API', () => {
     // NO MOCKING - use real Stage API
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Wait for chart to load
     await chartUtils.waitForChart();
 
@@ -294,8 +242,6 @@ test.describe('POC: Stage Tests with Real API', () => {
     // NO MOCKING - test integration
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Wait for chart
     await chartUtils.waitForChart();
 
@@ -317,8 +263,6 @@ test.describe('POC: Stage Tests with Real API', () => {
 
   test('tooltip shows real data on hover', async ({ page }) => {
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     await chartUtils.waitForChart();
 
     // Hover over data point
@@ -339,8 +283,6 @@ test.describe('POC: Stage Tests with Real API', () => {
 
   test('pagination works with real Stage data', async ({ page }) => {
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     await page.getByRole('tab', { name: 'Current instances' }).click();
 
     // Wait for table
@@ -408,9 +350,7 @@ test.describe('POC: Hybrid Tests (Stage Auth + Mocked Data)', () => {
       }
     });
 
-    // Real Stage login
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
 
     // But we see MOCKED data (controlled test scenario)
     await page.getByRole('tab', { name: 'Current instances' }).click();
@@ -437,8 +377,6 @@ test.describe('POC: Hybrid Tests (Stage Auth + Mocked Data)', () => {
     });
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     await chartUtils.waitForChart();
 
     // Chart should handle gaps
@@ -471,8 +409,6 @@ test.describe('POC: Visual Regression on Stage', () => {
     });
 
     await page.goto('https://console.stage.redhat.com/subscriptions/usage/rhel');
-    await loginToStage(page);
-
     // Wait for chart to stabilize
     await chartUtils.waitForChartStable(2000);
 
